@@ -1066,6 +1066,52 @@ createButton(Pages.Teleport, "Copy Job ID", function()
     end
 end)
 
+-- BLACK DRAGON: AUTO JOIN JOB ID
+
+section(Pages.Teleport, "AUTO SERVER JOIN")
+
+local JobIdBox = Instance.new("TextBox")
+JobIdBox.Size = UDim2.new(1, -4, 0, 38)
+JobIdBox.BackgroundColor3 = PANEL
+JobIdBox.BorderSizePixel = 0
+JobIdBox.PlaceholderText = "Enter Server Job ID"
+JobIdBox.PlaceholderColor3 = GRAY
+JobIdBox.Text = ""
+JobIdBox.TextColor3 = WHITE
+JobIdBox.TextSize = 11
+JobIdBox.Font = Enum.Font.Gotham
+JobIdBox.ClearTextOnFocus = false
+JobIdBox.Parent = Pages.Teleport
+corner(JobIdBox, 7)
+
+createButton(Pages.Teleport, "JOIN JOB ID", function()
+    local jobId = JobIdBox.Text:gsub("%s+", "")
+
+    if jobId == "" then
+        notify("SERVER", "Enter a Job ID first")
+        return
+    end
+
+    if #jobId ~= 36 then
+        notify("SERVER", "Invalid Job ID")
+        return
+    end
+
+    notify("SERVER", "Joining selected server...")
+
+    local success, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(
+            game.PlaceId,
+            jobId,
+            Player
+        )
+    end)
+
+    if not success then
+        notify("SERVER", "Join failed: " .. tostring(err))
+    end
+end)
+
 createButton(Pages.Teleport, "Server Hop", function()
     notify("Server", "Searching for another server...")
 
@@ -1124,7 +1170,7 @@ Players.PlayerAdded:Connect(function(target)
         if Settings.ESP then
             local highlight = Instance.new("Highlight")
             highlight.FillColor = RED
-            highlight.OutlineColor = WHITE
+            highlight.OutlineColor = GREEN
             highlight.FillTransparency = 0.65
             highlight.Adornee = character
             highlight.Parent = character
@@ -1141,28 +1187,44 @@ Players.PlayerRemoving:Connect(function(target)
 end)
 
 -- CONTINUOUS FEATURES
+local OriginalCollision = setmetatable({}, {__mode = "k"})
+
 Connections.Main = RunService.Stepped:Connect(function()
     local character = Player.Character
     local root = getRoot()
 
-    if Settings.Noclip and character then
+    if character then
         for _, part in ipairs(character:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.CanCollide = false
+
+                if Settings.Noclip then
+                    if OriginalCollision[part] == nil then
+                        OriginalCollision[part] = part.CanCollide
+                    end
+
+                    part.CanCollide = false
+
+                elseif OriginalCollision[part] ~= nil then
+                    part.CanCollide = OriginalCollision[part]
+                    OriginalCollision[part] = nil
+                end
             end
         end
     end
 
     if Settings.AntiVoid and root and root.Position.Y < -50 then
-        local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+        local spawn = workspace:FindFirstChildWhichIsA(
+            "SpawnLocation", true
+        )
+
         if spawn then
             root.CFrame = spawn.CFrame + Vector3.new(0, 5, 0)
         end
     end
 end)
 
-Connections.Stats = RunService.RenderStepped:Connect(function()
-    local fps = math.floor(1 / math.max(RunService.RenderStepped:Wait(), 0.001))
+Connections.Stats = RunService.RenderStepped:Connect(function(deltaTime)
+    local fps = math.floor(1 / math.max(deltaTime, 0.001))
     local ping = "--"
 
     pcall(function()
@@ -1171,7 +1233,8 @@ Connections.Stats = RunService.RenderStepped:Connect(function()
         )) .. " ms"
     end)
 
-    StatsLabel.Text = "FPS: " .. tostring(fps) .. "    PING: " .. ping
+    StatsLabel.Text = "FPS: " .. tostring(fps)
+        .. "    PING: " .. ping
 end)
 
 -- ANTI-AFK
@@ -1185,8 +1248,7 @@ Player.Idled:Connect(function()
 end)
 
 -- CONFIG MANAGER
-
-local function SaveConfig()
+SaveConfig = function()
     if not (writefile and makefolder and isfolder) then
         notify("Config", "File saving unavailable")
         return
@@ -1203,7 +1265,7 @@ local function SaveConfig()
     notify("Config", success and "Config saved!" or "Save failed")
 end
 
-local function LoadConfig()
+LoadConfig = function()
     if not (readfile and isfile) then
         notify("Config", "File loading unavailable")
         return
@@ -1241,7 +1303,7 @@ local function LoadConfig()
     notify("Config", "Settings restored!")
 end
 
-local function ResetConfig()
+ResetConfig = function()
     for key, value in pairs(DefaultSettings) do
         Settings[key] = value
     end
